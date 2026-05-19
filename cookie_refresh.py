@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 from browser_use_sdk.v3 import AsyncBrowserUse
 from supabase import create_client
 
@@ -51,6 +52,7 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 async def refresh_one(api_key, email, password, name):
+    print(f"🔄 Refresh cookie per {name} ({email})")
     client = AsyncBrowserUse(api_key=api_key)
     result = await client.run(
         f"Vai su https://www.easyhits4u.com/logon/, "
@@ -59,12 +61,13 @@ async def refresh_one(api_key, email, password, name):
         f"nel formato esatto: sesids=VALORE; user_id=VALORE"
     )
     output = result.output
+    print(f"📥 Output ricevuto: {output}")
     try:
         sesids = output.split("sesids=")[1].split(";")[0].strip()
         user_id = output.split("user_id=")[1].strip()
-    except:
-        raise Exception(f"Formato inaspettato: {output}")
-    return sesids, user_id
+        return sesids, user_id
+    except Exception as e:
+        raise Exception(f"Formato inaspettato: {output} - {e}")
 
 async def main():
     api_key = os.environ.get("BROWSER_USE_API_KEY")
@@ -72,22 +75,30 @@ async def main():
         raise Exception("Manca BROWSER_USE_API_KEY")
     
     while True:
-        print("🔄 Avvio ciclo refresh cookie...")
+        print("\n" + "="*60)
+        print("🔄 Avvio ciclo refresh cookie -", time.strftime("%Y-%m-%d %H:%M:%S"))
+        print("="*60)
+        
         for acc in ACCOUNTS:
             try:
                 sesids, user_id = await refresh_one(api_key, acc["email"], acc["password"], acc["name"])
                 cookie_string = f"sesids={sesids}; user_id={user_id}"
+                
                 supabase.table("account_cookies").upsert({
                     "email": acc["email"],
                     "account_name": acc["name"],
                     "cookies_string": cookie_string,
                     "status": "active"
                 }).execute()
-                print(f"✅ {acc['name']} cookie aggiornato")
+                
+                print(f"✅ {acc['name']}: cookie aggiornato (sesids={sesids})")
+                
             except Exception as e:
-                print(f"❌ {acc['name']} errore: {e}")
+                print(f"❌ {acc['name']}: errore - {e}")
+            
             await asyncio.sleep(2)
-        print("✅ Ciclo completato. Attendo 3 ore...")
+        
+        print("\n✅ Ciclo completato. Attendo 3 ore prima del prossimo refresh...")
         await asyncio.sleep(10800)
 
 if __name__ == "__main__":
