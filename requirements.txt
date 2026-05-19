@@ -1,1 +1,3 @@
 browser-use-sdk
+supabase
+supabase[storage]
